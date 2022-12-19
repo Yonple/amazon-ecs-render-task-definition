@@ -1391,51 +1391,67 @@ const fs = __webpack_require__(747);
 async function run() {
   try {
     // Get inputs
-    const taskDefinitionFile = core.getInput('task-definition', { required: true });
-    const containerName = core.getInput('container-name', { required: true });
-    const imageURI = core.getInput('image', { required: true });
+    const taskDefinitionFile = core.getInput("task-definition", {
+      required: true,
+    });
+    const containerName = core.getInput("container-name", { required: true });
+    const imageURI = core.getInput("image", { required: true });
 
-    const environmentVariables = core.getInput('environment-variables', { required: false });
+    const environmentVariables = core.getInput("environment-variables", {
+      required: false,
+    });
+    const secrets = core.getInput("secrets", { required: false });
 
     // Parse the task definition
-    const taskDefPath = path.isAbsolute(taskDefinitionFile) ?
-      taskDefinitionFile :
-      path.join(process.env.GITHUB_WORKSPACE, taskDefinitionFile);
+    const taskDefPath = path.isAbsolute(taskDefinitionFile)
+      ? taskDefinitionFile
+      : path.join(process.env.GITHUB_WORKSPACE, taskDefinitionFile);
     if (!fs.existsSync(taskDefPath)) {
-      throw new Error(`Task definition file does not exist: ${taskDefinitionFile}`);
+      throw new Error(
+        `Task definition file does not exist: ${taskDefinitionFile}`
+      );
     }
     const taskDefContents = require(taskDefPath);
 
     // Insert the image URI
     if (!Array.isArray(taskDefContents.containerDefinitions)) {
-      throw new Error('Invalid task definition format: containerDefinitions section is not present or is not an array');
+      throw new Error(
+        "Invalid task definition format: containerDefinitions section is not present or is not an array"
+      );
     }
-    const containerDef = taskDefContents.containerDefinitions.find(function(element) {
+    const containerDef = taskDefContents.containerDefinitions.find(function (
+      element
+    ) {
       return element.name == containerName;
     });
     if (!containerDef) {
-      throw new Error('Invalid task definition: Could not find container definition with matching name');
+      throw new Error(
+        "Invalid task definition: Could not find container definition with matching name"
+      );
     }
     containerDef.image = imageURI;
 
     if (environmentVariables) {
-
       // If environment array is missing, create it
       if (!Array.isArray(containerDef.environment)) {
         containerDef.environment = [];
       }
 
       // Get pairs by splitting on newlines
-      environmentVariables.split('\n').forEach(function (line) {
+      environmentVariables.split("\n").forEach(function (line) {
         // Trim whitespace
         const trimmedLine = line.trim();
         // Skip if empty
-        if (trimmedLine.length === 0) { return; }
+        if (trimmedLine.length === 0) {
+          return;
+        }
         // Split on =
         const separatorIdx = trimmedLine.indexOf("=");
         // If there's nowhere to split
         if (separatorIdx === -1) {
-            throw new Error(`Cannot parse the environment variable '${trimmedLine}'. Environment variable pairs must be of the form NAME=value.`);
+          throw new Error(
+            `Cannot parse the environment variable '${trimmedLine}'. Environment variable pairs must be of the form NAME=value.`
+          );
         }
         // Build object
         const variable = {
@@ -1444,7 +1460,9 @@ async function run() {
         };
 
         // Search container definition environment for one matching name
-        const variableDef = containerDef.environment.find((e) => e.name == variable.name);
+        const variableDef = containerDef.environment.find(
+          (e) => e.name == variable.name
+        );
         if (variableDef) {
           // If found, update
           variableDef.value = variable.value;
@@ -1452,23 +1470,65 @@ async function run() {
           // Else, create
           containerDef.environment.push(variable);
         }
-      })
+      });
     }
 
+    if (secrets) {
+      // If environment array is missing, create it
+      if (!Array.isArray(containerDef.secrets)) {
+        containerDef.secrets = [];
+      }
+
+      // Get pairs by splitting on newlines
+      secrets.split("\n").forEach(function (line) {
+        // Trim whitespace
+        const trimmedLine = line.trim();
+        // Skip if empty
+        if (trimmedLine.length === 0) {
+          return;
+        }
+        // Split on =
+        const separatorIdx = trimmedLine.indexOf("=");
+        // If there's nowhere to split
+        if (separatorIdx === -1) {
+          throw new Error(
+            `Cannot parse the secret '${trimmedLine}'. Secret pairs must be of the form NAME=valueFrom, 
+              where valueFrom is an arn from parameter store or secrets manager. See AWS documentation for more information: 
+              https://docs.aws.amazon.com/AmazonECS/latest/developerguide/specifying-sensitive-data.html.`
+          );
+        }
+        // Build object
+        const secret = {
+          name: trimmedLine.substring(0, separatorIdx),
+          valueFrom: trimmedLine.substring(separatorIdx + 1),
+        };
+
+        // Search container definition environment for one matching name
+        const secretDef = containerDef.secrets.find(
+          (s) => s.name == secret.name
+        );
+        if (secretDef) {
+          // If found, update
+          secretDef.valueFrom = secret.valueFrom;
+        } else {
+          // Else, create
+          containerDef.secrets.push(secret);
+        }
+      });
+    }
 
     // Write out a new task definition file
     var updatedTaskDefFile = tmp.fileSync({
       tmpdir: process.env.RUNNER_TEMP,
-      prefix: 'task-definition-',
-      postfix: '.json',
+      prefix: "task-definition-",
+      postfix: ".json",
       keep: true,
-      discardDescriptor: true
+      discardDescriptor: true,
     });
     const newTaskDefContents = JSON.stringify(taskDefContents, null, 2);
     fs.writeFileSync(updatedTaskDefFile.name, newTaskDefContents);
-    core.setOutput('task-definition', updatedTaskDefFile.name);
-  }
-  catch (error) {
+    core.setOutput("task-definition", updatedTaskDefFile.name);
+  } catch (error) {
     core.setFailed(error.message);
   }
 }
@@ -1477,7 +1537,7 @@ module.exports = run;
 
 /* istanbul ignore next */
 if (require.main === require.cache[eval('__filename')]) {
-    run();
+  run();
 }
 
 
